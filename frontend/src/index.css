@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 218 40% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 218 40% 15%;
+    --primary: 217 78% 42%;
+    --primary-foreground: 0 0% 100%;
+    --muted: 210 33% 96%;
+    --muted-foreground: 216 20% 42%;
+    --border: 214 30% 89%;
+    --input: 214 30% 86%;
+    --ring: 217 78% 42%;
+  }
+
+  .dark {
+    --background: 222 47% 8%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 98%;
+    --primary: 221 83% 60%;
+    --primary-foreground: 210 40% 98%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --border: 217 33% 20%;
+    --input: 217 33% 20%;
+    --ring: 221 83% 53%;
+  }
+
+  * { border-color: hsl(var(--border)); }
+  html { background: hsl(var(--background)); }
+  body { margin: 0; min-width: 320px; background: hsl(var(--background)); color: hsl(var(--foreground)); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+}
+
+@layer components {
+  .scrollbar-hidden {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hidden::-webkit-scrollbar { display: none; }
+  .account-dropdown { background: #fff !important; opacity: 1; }
+  .dark .account-dropdown { background: #1c2738 !important; }
+
+  .dashboard-hero { border-color: hsl(var(--border)); background: #f5f9fc; }
+  /* Keep the complete Supreme Court scene visible.  The prior scale and Y
+     translation turned this into an accidental close-up of the dome. */
+  .hero-image {
+    inset-block: 0;
+    right: 0;
+    left: auto;
+    /* A wide, masked image retains the court's proportions while blending
+       continuously into the copy area instead of creating a vertical seam. */
+    width: 70%;
+    max-width: none;
+    transform-origin: top center;
+    object-position: center;
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, rgb(0 0 0 / .08) 18%, #000 55%);
+    mask-image: linear-gradient(to right, transparent 0%, rgb(0 0 0 / .08) 18%, #000 55%);
+  }
+  .hero-overlay { background: linear-gradient(90deg, hsl(var(--card)) 0%, hsl(var(--card) / .96) 42%, hsl(var(--card) / .42) 68%, transparent 100%); }
+  .hero-watermark {
+    top: 3.5rem;
+    bottom: auto;
+    width: 6.5rem;
+    color: hsl(var(--muted-foreground) / .95);
+  }
+  .hero-eyebrow { color: hsl(var(--muted-foreground)); }
+  .hero-title { color: hsl(var(--foreground)); }
+  .hero-description { color: hsl(var(--muted-foreground)); }
+  .hero-features { color: hsl(var(--foreground)); }
+  .official-badge { color: #064733; background: #e3f7ec; border-color: transparent; }
+
+  .dark .hero-overlay { background: linear-gradient(90deg, hsl(var(--card) / .98) 0%, hsl(var(--card) / .9) 46%, hsl(var(--card) / .2) 100%); }
+  .dark .dashboard-hero { border-color: hsl(var(--border)); }
+  .dark .official-badge { color: #6ee7b7; background: rgb(6 78 59 / .35); border-color: rgb(16 185 129 / .3); }
+
+  @media (max-width: 1023px) {
+    .dashboard-hero { height: 290px; }
+    .hero-image { width: 70%; transform: none; }
+    .hero-features { gap: 1rem; }
+  }
+
+  @media (max-width: 639px) {
+    .dashboard-hero { height: 360px; }
+    .hero-image {
+      width: 100%;
+      transform: none;
+      object-position: 62% top;
+      -webkit-mask-image: none;
+      mask-image: none;
+    }
+    .hero-overlay { background: linear-gradient(90deg, hsl(var(--card) / .97) 0%, hsl(var(--card) / .86) 75%, hsl(var(--card) / .38) 100%); }
+    .hero-watermark { display: none; }
+  }
+}
