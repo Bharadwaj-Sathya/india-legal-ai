@@ -78,11 +78,12 @@ temp/
 *.sqlite
 *.sqlite3
 *.duckdb
-backend/data/chroma/
-backend/data/faiss/
-backend/data/vectorstore/
-backend/data/processed/
-backend/data/uploads/
+
+
+
+# Ignore all PDF files anywhere inside backend/app/data
+/backend/app/data/**/*.pdf
+/backend/app/data/**/*.PDF
 
 # User and generated assets
 uploads/
