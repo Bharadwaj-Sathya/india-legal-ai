@@ -10,7 +10,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-
+from app.features.routes.rag import router as rag_router
 
 # -------------------------------------------------
 # Load environment variables
@@ -175,4 +175,6 @@ def health_check():
 
 
 app.include_router(api_router, prefix="/api/v1")
+app.include_router(rag_router, prefix="/api/v1")
+
 
