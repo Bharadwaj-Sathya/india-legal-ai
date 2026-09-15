@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Home, MessageCircle, BookOpen, GitCompare, Bookmark, Clock, Scale, FileText, ClipboardList, ChevronRight } from 'lucide-react'
+import { Home, MessageCircle, BookOpen, GitCompare, Scale, FileText, ClipboardList, ChevronRight } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -19,8 +19,6 @@ const NAV_ITEMS: NavItemData[] = [
   { label: 'Chat', icon: MessageCircle, href: '/chat' },
   { label: 'Browse Laws', icon: BookOpen, href: '/browse-laws' },
   { label: 'Compare Laws', icon: GitCompare, href: '/compare-laws' },
-  { label: 'Saved', icon: Bookmark, href: '/saved' },
-  { label: 'History', icon: Clock, href: '/history' },
 ]
 
 const LEGAL_RESOURCES: LegalResourceData[] = [

@@ -1054,7 +1054,7 @@ export default function Chat() {
   ========================================================== */
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background text-slate-800">
+    <div className="flex h-screen overflow-hidden bg-background text-foreground">
       <Sidebar />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -1063,20 +1063,20 @@ export default function Chat() {
         </div>
 
         <div className="flex min-h-0 flex-1">
-          <main className="scrollbar-hidden min-h-0 flex-1 overflow-y-auto bg-background">
+          <main className="scrollbar-hidden flex min-h-0 flex-1 flex-col overflow-y-auto bg-background">
             <div className="flex min-h-0 flex-1 flex-col">
-              <div className="shrink-0 border-b border-slate-200 bg-white px-8 py-5">
+              <div className="shrink-0 border-b border-border bg-card px-8 py-5">
                 <div className="flex items-center">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef4fb]">
-                      <Scale size={21} className="text-[#17304a]" />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
+                      <Scale size={21} className="text-foreground" />
                     </div>
 
                     <div>
-                      <h2 className="text-[19px] font-semibold text-[#13283d]">
+                      <h2 className="text-[19px] font-semibold text-foreground">
                         Legal AI Assistant
                       </h2>
-                      <p className="mt-1 text-[11px] text-slate-500">
+                      <p className="mt-1 text-[11px] text-muted-foreground">
                         Ask questions about Indian laws and legal provisions
                       </p>
                     </div>
@@ -1085,7 +1085,7 @@ export default function Chat() {
                   <button
                     type="button"
                     onClick={handleNewChat}
-                    className="ml-auto flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-[12px] font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+                    className="ml-auto flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-[12px] font-medium text-foreground shadow-sm transition hover:bg-muted"
                   >
                     <Plus size={15} />
                     New Chat
@@ -1097,15 +1097,15 @@ export default function Chat() {
                 <div className="mx-auto max-w-[900px]">
                   {messages.length === 0 && (
                     <div className="flex min-h-[400px] flex-col items-center justify-center text-center">
-                      <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eaf1f8]">
-                        <MessageSquare size={27} className="text-[#17304a]" />
+                      <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+                        <MessageSquare size={27} className="text-foreground" />
                       </div>
 
-                      <h2 className="text-[24px] font-semibold text-[#13283d]">
+                      <h2 className="text-[24px] font-semibold text-foreground">
                         How can I help you?
                       </h2>
 
-                      <p className="mt-3 max-w-[560px] text-[13px] leading-6 text-slate-500">
+                      <p className="mt-3 max-w-[560px] text-[13px] leading-6 text-muted-foreground">
                         Ask me about Indian laws, sections, legal procedures,
                         rights, or compare provisions across different Acts.
                       </p>
@@ -1151,22 +1151,22 @@ export default function Chat() {
                         }
                       >
                         {chatMessage.role === "user" ? (
-                          <div className="max-w-[75%] rounded-2xl rounded-br-md bg-[#12263a] px-5 py-3 text-[13px] leading-6 text-white shadow-sm">
+                          <div className="max-w-[75%] rounded-2xl rounded-br-md bg-slate-900 px-5 py-3 text-[13px] leading-6 text-white shadow-sm dark:bg-slate-700">
                             {chatMessage.content}
                           </div>
                         ) : (
                           <div className="w-full max-w-[850px]">
-                            <div className="rounded-2xl rounded-bl-md border border-slate-200 bg-white p-6 shadow-sm">
+                            <div className="rounded-2xl rounded-bl-md border border-border bg-card p-6 shadow-sm">
                               <div className="mb-4 flex items-center gap-3">
-                                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#eaf1f8]">
-                                  <Scale size={18} className="text-[#17304a]" />
+                                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+                                  <Scale size={18} className="text-foreground" />
                                 </div>
 
                                 <div>
-                                  <p className="text-[13px] font-semibold text-[#13283d]">
+                                  <p className="text-[13px] font-semibold text-foreground">
                                     Indian Legal AI
                                   </p>
-                                  <p className="text-[10px] text-slate-400">
+                                  <p className="text-[10px] text-muted-foreground">
                                     {chatMessage.streaming
                                       ? "Generating answer..."
                                       : "Based on retrieved legal sources"}
@@ -1175,28 +1175,28 @@ export default function Chat() {
                               </div>
 
                               {chatMessage.streaming && !chatMessage.content && (
-                                <div className="flex items-center gap-3 py-2 text-[12px] text-slate-400">
+                                <div className="flex items-center gap-3 py-2 text-[12px] text-muted-foreground">
                                   <Loader2 size={15} className="animate-spin" />
                                   Searching legal sources...
                                 </div>
                               )}
 
                               {chatMessage.content && (
-                                <div className="legal-markdown text-[14px] leading-7 text-slate-700">
+                                <div className="legal-markdown text-[14px] leading-7 text-foreground/90">
                                   <ReactMarkdown
                                     components={{
                                       h1: ({ children }) => (
-                                        <h1 className="mb-4 text-xl font-bold text-[#13283d]">
+                                        <h1 className="mb-4 text-xl font-bold text-foreground">
                                           {children}
                                         </h1>
                                       ),
                                       h2: ({ children }) => (
-                                        <h2 className="mb-3 mt-5 text-lg font-semibold text-[#13283d]">
+                                        <h2 className="mb-3 mt-5 text-lg font-semibold text-foreground">
                                           {children}
                                         </h2>
                                       ),
                                       h3: ({ children }) => (
-                                        <h3 className="mb-2 mt-4 text-base font-semibold text-[#13283d]">
+                                        <h3 className="mb-2 mt-4 text-base font-semibold text-foreground">
                                           {children}
                                         </h3>
                                       ),
@@ -1217,12 +1217,12 @@ export default function Chat() {
                                         <li className="pl-1">{children}</li>
                                       ),
                                       strong: ({ children }) => (
-                                        <strong className="font-semibold text-[#13283d]">
+                                        <strong className="font-semibold text-foreground">
                                           {children}
                                         </strong>
                                       ),
                                       blockquote: ({ children }) => (
-                                        <blockquote className="my-4 border-l-4 border-slate-300 bg-slate-50 px-4 py-3 text-slate-600">
+                                        <blockquote className="my-4 border-l-4 border-border bg-muted px-4 py-3 text-muted-foreground">
                                           {children}
                                         </blockquote>
                                       ),
@@ -1238,12 +1238,12 @@ export default function Chat() {
                               )}
 
                               {!chatMessage.streaming && chatMessage.content && (
-                                <div className="relative mt-4 flex items-center gap-1 border-t border-slate-100 pt-3">
+                                <div className="relative mt-4 flex items-center gap-1 border-t border-border pt-3">
                                   <button
                                     type="button"
                                     onClick={() => handleCopy(chatMessage.content, index)}
                                     title={copiedIndex === index ? "Copied" : "Copy"}
-                                    className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+                                    className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
                                   >
                                     {copiedIndex === index ? (
                                       <Check size={16} />
@@ -1256,10 +1256,10 @@ export default function Chat() {
                                     type="button"
                                     onClick={() => handleFeedback(index, "up")}
                                     title="Good response"
-                                    className={`flex h-8 w-8 items-center justify-center rounded-lg transition hover:bg-slate-100 ${
+                                    className={`flex h-8 w-8 items-center justify-center rounded-lg transition hover:bg-muted ${
                                       feedback[index] === "up"
-                                        ? "bg-slate-100 text-[#12263a]"
-                                        : "text-slate-500 hover:text-slate-800"
+                                        ? "bg-muted text-foreground"
+                                        : "text-muted-foreground hover:text-foreground"
                                     }`}
                                   >
                                     <ThumbsUp size={16} />
@@ -1269,10 +1269,10 @@ export default function Chat() {
                                     type="button"
                                     onClick={() => handleFeedback(index, "down")}
                                     title="Bad response"
-                                    className={`flex h-8 w-8 items-center justify-center rounded-lg transition hover:bg-slate-100 ${
+                                    className={`flex h-8 w-8 items-center justify-center rounded-lg transition hover:bg-muted ${
                                       feedback[index] === "down"
-                                        ? "bg-slate-100 text-[#12263a]"
-                                        : "text-slate-500 hover:text-slate-800"
+                                        ? "bg-muted text-foreground"
+                                        : "text-muted-foreground hover:text-foreground"
                                     }`}
                                   >
                                     <ThumbsDown size={16} />
@@ -1282,7 +1282,7 @@ export default function Chat() {
                                     type="button"
                                     onClick={() => handleShare(chatMessage.content)}
                                     title="Share"
-                                    className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+                                    className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
                                   >
                                     <Share2 size={16} />
                                   </button>
@@ -1292,7 +1292,7 @@ export default function Chat() {
                                     onClick={() => handleRegenerate(index)}
                                     disabled={loading}
                                     title="Regenerate"
-                                    className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                                    className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                                   >
                                     <RotateCcw size={16} />
                                   </button>
@@ -1305,17 +1305,17 @@ export default function Chat() {
                                       )
                                     }
                                     title="More"
-                                    className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+                                    className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
                                   >
                                     <MoreHorizontal size={17} />
                                   </button>
 
                                   {openMenuIndex === index && (
-                                    <div className="absolute bottom-11 left-0 z-20 min-w-[150px] rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+                                    <div className="absolute bottom-11 left-0 z-20 min-w-[150px] rounded-lg border border-border bg-card p-1 shadow-lg">
                                       <button
                                         type="button"
                                         onClick={() => handleCopy(chatMessage.content, index)}
-                                        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[11px] text-slate-600 hover:bg-slate-50"
+                                        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[11px] text-foreground hover:bg-muted"
                                       >
                                         <Copy size={13} />
                                         Copy response
@@ -1325,7 +1325,7 @@ export default function Chat() {
                                         type="button"
                                         onClick={() => handleRegenerate(index)}
                                         disabled={loading}
-                                        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                                        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[11px] text-foreground hover:bg-muted disabled:opacity-40"
                                       >
                                         <RotateCcw size={13} />
                                         Regenerate
@@ -1338,8 +1338,8 @@ export default function Chat() {
                               {!chatMessage.streaming &&
                                 chatMessage.sources &&
                                 chatMessage.sources.length > 0 && (
-                                  <div className="mt-6 border-t border-slate-200 pt-5">
-                                    <h3 className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-slate-700">
+                                  <div className="mt-6 border-t border-border pt-5">
+                                    <h3 className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-foreground">
                                       <FileText size={15} />
                                       Retrieved Sources
                                     </h3>
@@ -1348,33 +1348,33 @@ export default function Chat() {
                                       {chatMessage.sources.map((source, sourceIndex) => (
                                         <details
                                           key={sourceIndex}
-                                          className="rounded-lg border border-slate-200 bg-slate-50"
+                                          className="rounded-lg border border-border bg-muted/40"
                                         >
-                                          <summary className="cursor-pointer px-4 py-3 text-[12px] font-medium text-slate-700">
+                                          <summary className="cursor-pointer px-4 py-3 text-[12px] font-medium text-foreground">
                                             <span>
                                               Section {source.section || "Unknown"}
                                             </span>
 
                                             {source.act && (
-                                              <span className="ml-2 text-slate-400">
+                                              <span className="ml-2 text-muted-foreground">
                                                 · {source.act}
                                               </span>
                                             )}
                                           </summary>
 
-                                          <div className="border-t border-slate-200 px-4 py-4">
+                                          <div className="border-t border-border px-4 py-4">
                                             {source.chapter && (
-                                              <p className="mb-2 text-[11px] text-slate-400">
+                                              <p className="mb-2 text-[11px] text-muted-foreground">
                                                 Chapter: {source.chapter}
                                               </p>
                                             )}
 
-                                            <p className="whitespace-pre-wrap text-[12px] leading-6 text-slate-600">
+                                            <p className="whitespace-pre-wrap text-[12px] leading-6 text-foreground/80">
                                               {source.content}
                                             </p>
 
                                             {source.source_file && (
-                                              <p className="mt-3 text-[10px] text-slate-400">
+                                              <p className="mt-3 text-[10px] text-muted-foreground">
                                                 Source: {source.source_file}
                                                 {source.page !== null &&
                                                   source.page !== undefined &&
@@ -1402,9 +1402,9 @@ export default function Chat() {
                 </div>
               </div>
 
-              <div className="shrink-0 border-t border-slate-200 bg-white px-6 py-5">
+              <div className="mt-auto shrink-0 border-t border-border bg-card px-6 py-2">
                 <div className="mx-auto max-w-[900px]">
-                  <div className="rounded-xl border border-slate-300 bg-white shadow-sm">
+                  <div className="rounded-xl border border-border bg-card shadow-sm">
                     <textarea
                       value={message}
                       onChange={(event) => setMessage(event.target.value)}
@@ -1412,13 +1412,13 @@ export default function Chat() {
                       placeholder="Ask a legal question..."
                       rows={3}
                       disabled={loading}
-                      className="w-full resize-none rounded-t-xl px-4 py-4 text-[13px] outline-none placeholder:text-slate-400 disabled:bg-slate-50"
+                      className="w-full resize-none rounded-t-xl bg-transparent px-4 py-4 text-[13px] text-foreground outline-none placeholder:text-muted-foreground disabled:bg-muted/50"
                     />
 
-                    <div className="flex items-center justify-between border-t border-slate-100 px-3 py-2">
+                    <div className="flex items-center justify-between border-t border-border px-3 py-2">
                       <button
                         type="button"
-                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-[11px] text-slate-500 transition hover:bg-slate-50"
+                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-[11px] text-muted-foreground transition hover:bg-muted hover:text-foreground"
                       >
                         <Paperclip size={14} />
                         Attach PDF
@@ -1428,7 +1428,7 @@ export default function Chat() {
                         type="button"
                         onClick={handleSend}
                         disabled={!message.trim() || loading}
-                        className="flex items-center gap-2 rounded-lg bg-[#12263a] px-4 py-2 text-[11px] font-medium text-white transition hover:bg-[#19354e] disabled:cursor-not-allowed disabled:opacity-40"
+                        className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-[11px] font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         {loading ? (
                           <Loader2 size={14} className="animate-spin" />
@@ -1440,7 +1440,7 @@ export default function Chat() {
                     </div>
                   </div>
 
-                  <p className="mt-3 text-center text-[10px] text-slate-400">
+                  <p className="mt-3 text-center text-[10px] text-muted-foreground">
                     AI-generated legal information may not constitute legal advice.
                     Verify important matters with official sources or a qualified lawyer.
                   </p>
@@ -1476,29 +1476,21 @@ function Suggestion({
     <button
       type="button"
       onClick={onClick}
-      className="group rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-[1px] hover:border-slate-300 hover:shadow"
+      className="group rounded-xl border border-border bg-card p-4 text-left shadow-sm transition hover:-translate-y-[1px] hover:border-primary/40 hover:shadow"
     >
-
       <div className="flex items-start gap-3">
-
-
-        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#eef4fb] text-[#17304a]">
-
+        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground">
           <MessageSquare
             size={15}
           />
-
         </div>
-
-
         <div>
-
-          <p className="text-[12px] font-semibold text-slate-800">
+          <p className="text-[12px] font-semibold text-foreground">
             {title}
           </p>
 
 
-          <p className="mt-1 text-[10px] leading-5 text-slate-500">
+          <p className="mt-1 text-[10px] leading-5 text-muted-foreground">
             {description}
           </p>
 
