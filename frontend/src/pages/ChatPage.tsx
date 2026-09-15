@@ -16,6 +16,13 @@ import {
   Bookmark,
   ChevronDown,
   Loader2,
+  Copy,
+  Check,
+  ThumbsUp,
+  ThumbsDown,
+  Share2,
+  RotateCcw,
+  MoreHorizontal,
 } from "lucide-react";
 
 
@@ -72,6 +79,304 @@ export default function Chat() {
 
   const [error, setError] =
     useState("");
+
+  const [copiedIndex, setCopiedIndex] =
+    useState<number | null>(null);
+
+  const [feedback, setFeedback] =
+    useState<Record<number, "up" | "down">>({});
+
+  const [openMenuIndex, setOpenMenuIndex] =
+    useState<number | null>(null);
+
+
+  /* ==========================================================
+     RESPONSE ACTIONS
+  ========================================================== */
+
+  const handleCopy = async (
+    content: string,
+    index: number
+  ) => {
+    if (!content) return;
+
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedIndex(index);
+
+      window.setTimeout(() => {
+        setCopiedIndex((current) =>
+          current === index ? null : current
+        );
+      }, 1500);
+    } catch (copyError) {
+      console.error("Copy failed:", copyError);
+    }
+  };
+
+  const handleFeedback = (
+    index: number,
+    value: "up" | "down"
+  ) => {
+    setFeedback((previous) => ({
+      ...previous,
+      [index]:
+        previous[index] === value
+          ? undefined
+          : value,
+    } as Record<number, "up" | "down">));
+  };
+
+  const handleShare = async (content: string) => {
+    if (!content) return;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "Indian Legal AI",
+          text: content,
+        });
+      } else {
+        await navigator.clipboard.writeText(content);
+      }
+    } catch (shareError) {
+      // User cancelling the native share dialog is not an error.
+      console.log("Share cancelled or unavailable:", shareError);
+    }
+  };
+
+  const handleRegenerate = async (assistantIndex: number) => {
+    if (loading) return;
+
+    const userMessage = messages[assistantIndex - 1];
+
+    if (
+      !userMessage ||
+      userMessage.role !== "user" ||
+      !userMessage.content.trim()
+    ) {
+      return;
+    }
+
+    const query = userMessage.content.trim();
+
+    setError("");
+    setLoading(true);
+
+    setMessages((previous) => {
+      const updated = [...previous];
+
+      if (updated[assistantIndex]?.role === "assistant") {
+        updated[assistantIndex] = {
+          ...updated[assistantIndex],
+          content: "",
+          sources: [],
+          streaming: true,
+        };
+      }
+
+      return updated;
+    });
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/rag/query/stream`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+          },
+          body: JSON.stringify({
+            query,
+            k: 5,
+            act: null,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        let errorMessage =
+          `Backend returned HTTP ${response.status}`;
+
+        try {
+          const errorData = await response.json();
+
+          if (errorData?.detail) {
+            errorMessage =
+              typeof errorData.detail === "string"
+                ? errorData.detail
+                : JSON.stringify(errorData.detail);
+          }
+        } catch {
+          // Ignore JSON parse errors.
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      if (!response.body) {
+        throw new Error(
+          "Backend did not return a streaming response."
+        );
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+
+        if (done) break;
+
+        buffer += decoder.decode(value, {
+          stream: true,
+        });
+
+        const events = buffer.split(/\r?\n\r?\n/);
+        buffer = events.pop() || "";
+
+        for (const event of events) {
+          if (!event.trim()) continue;
+
+          const lines = event.split(/\r?\n/);
+          let eventType = "message";
+          let eventData = "";
+
+          for (const line of lines) {
+            if (line.startsWith("event:")) {
+              eventType = line.substring(6).trim();
+            }
+
+            if (line.startsWith("data:")) {
+              const rawData = line.startsWith("data: ")
+                ? line.substring(6)
+                : line.substring(5);
+
+              eventData += rawData;
+            }
+          }
+
+          if (eventType === "sources") {
+            try {
+              const sources: SourceDocument[] =
+                JSON.parse(eventData);
+
+              setMessages((previous) => {
+                const updated = [...previous];
+
+                if (
+                  updated[assistantIndex]?.role ===
+                  "assistant"
+                ) {
+                  updated[assistantIndex] = {
+                    ...updated[assistantIndex],
+                    sources,
+                  };
+                }
+
+                return updated;
+              });
+            } catch (sourceError) {
+              console.error(
+                "Source parsing failed:",
+                sourceError
+              );
+            }
+          }
+
+          if (eventType === "token") {
+            let token = "";
+
+            try {
+              token = JSON.parse(eventData);
+            } catch {
+              token = eventData;
+            }
+
+            if (!token) continue;
+
+            setMessages((previous) => {
+              const updated = [...previous];
+
+              if (
+                updated[assistantIndex]?.role ===
+                "assistant"
+              ) {
+                updated[assistantIndex] = {
+                  ...updated[assistantIndex],
+                  content:
+                    updated[assistantIndex].content +
+                    token,
+                  streaming: true,
+                };
+              }
+
+              return updated;
+            });
+          }
+
+          if (eventType === "error") {
+            let errorMessage = eventData;
+
+            try {
+              errorMessage = JSON.parse(eventData);
+            } catch {
+              // Keep raw value.
+            }
+
+            throw new Error(errorMessage);
+          }
+
+          if (eventType === "done") {
+            setMessages((previous) => {
+              const updated = [...previous];
+
+              if (
+                updated[assistantIndex]?.role ===
+                "assistant"
+              ) {
+                updated[assistantIndex] = {
+                  ...updated[assistantIndex],
+                  streaming: false,
+                };
+              }
+
+              return updated;
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Regenerate failed:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to regenerate the answer."
+      );
+
+      setMessages((previous) => {
+        const updated = [...previous];
+
+        if (
+          updated[assistantIndex]?.role === "assistant" &&
+          !updated[assistantIndex].content
+        ) {
+          updated[assistantIndex] = {
+            ...updated[assistantIndex],
+            streaming: false,
+          };
+        }
+
+        return updated;
+      });
+    } finally {
+      setLoading(false);
+      setOpenMenuIndex(null);
+    }
+  };
 
 
   /* ==========================================================
@@ -378,10 +683,17 @@ export default function Chat() {
                * Don't add extra spaces here.
                * The backend controls token spacing.
                */
-              eventData +=
-                line
-                  .substring(5)
-                  .trim();
+              const rawData =
+                line.startsWith("data: ")
+                  ? line.substring(6)
+                  : line.substring(5);
+
+              /*
+               * Preserve the exact whitespace emitted by
+               * the backend so streamed words do not stick
+               * together.
+               */
+              eventData += rawData;
 
             }
 
@@ -1168,10 +1480,6 @@ export default function Chat() {
                         ) : (
 
 
-                          /* =================================================
-                             ONE AND ONLY ONE AI BOX
-                          ================================================== */
-
                           <div className="w-full max-w-[850px]">
 
                             <div className="rounded-2xl rounded-bl-md border border-slate-200 bg-white p-6 shadow-sm">
@@ -1361,6 +1669,144 @@ export default function Chat() {
                                 </div>
 
                               )}
+
+
+                              {/* =================================================
+                                  RESPONSE ACTIONS
+                              ================================================== */}
+
+                              {!chatMessage.streaming &&
+                                chatMessage.content && (
+                                  <div className="relative mt-4 flex items-center gap-1 border-t border-slate-100 pt-3">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleCopy(
+                                          chatMessage.content,
+                                          index
+                                        )
+                                      }
+                                      title={
+                                        copiedIndex === index
+                                          ? "Copied"
+                                          : "Copy"
+                                      }
+                                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+                                    >
+                                      {copiedIndex === index ? (
+                                        <Check size={16} />
+                                      ) : (
+                                        <Copy size={16} />
+                                      )}
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleFeedback(
+                                          index,
+                                          "up"
+                                        )
+                                      }
+                                      title="Good response"
+                                      className={`flex h-8 w-8 items-center justify-center rounded-lg transition hover:bg-slate-100 ${
+                                        feedback[index] === "up"
+                                          ? "bg-slate-100 text-[#12263a]"
+                                          : "text-slate-500 hover:text-slate-800"
+                                      }`}
+                                    >
+                                      <ThumbsUp size={16} />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleFeedback(
+                                          index,
+                                          "down"
+                                        )
+                                      }
+                                      title="Bad response"
+                                      className={`flex h-8 w-8 items-center justify-center rounded-lg transition hover:bg-slate-100 ${
+                                        feedback[index] === "down"
+                                          ? "bg-slate-100 text-[#12263a]"
+                                          : "text-slate-500 hover:text-slate-800"
+                                      }`}
+                                    >
+                                      <ThumbsDown size={16} />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleShare(
+                                          chatMessage.content
+                                        )
+                                      }
+                                      title="Share"
+                                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+                                    >
+                                      <Share2 size={16} />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleRegenerate(index)
+                                      }
+                                      disabled={loading}
+                                      title="Regenerate"
+                                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                      <RotateCcw size={16} />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setOpenMenuIndex(
+                                          openMenuIndex === index
+                                            ? null
+                                            : index
+                                        )
+                                      }
+                                      title="More"
+                                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+                                    >
+                                      <MoreHorizontal size={17} />
+                                    </button>
+
+                                    {openMenuIndex === index && (
+                                      <div className="absolute bottom-11 left-0 z-20 min-w-[150px] rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleCopy(
+                                              chatMessage.content,
+                                              index
+                                            )
+                                          }
+                                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[11px] text-slate-600 hover:bg-slate-50"
+                                        >
+                                          <Copy size={13} />
+                                          Copy response
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleRegenerate(index)
+                                          }
+                                          disabled={loading}
+                                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                                        >
+                                          <RotateCcw size={13} />
+                                          Regenerate
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
 
 
                               {/* =================================================
