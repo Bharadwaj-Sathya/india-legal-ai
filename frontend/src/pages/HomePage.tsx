@@ -124,6 +124,7 @@ function QuickActionGrid() {
 
 function ChatInput() {
   const dispatch = useDispatch()
+  const navigate = useNavigate()
   const chatInput = useSelector((state: RootState) => state.ui?.chatInput ?? '')
   const [chipSet, setChipSet] = useState<0 | 1>(0)
   const [validationMsg, setValidationMsg] = useState('')
@@ -140,6 +141,7 @@ function ChatInput() {
     dispatch(addRecentQuery({ text: chatInput.trim() }))
     dispatch(setChatInput(''))
     setValidationMsg('')
+    navigate('/chat', { state: { question: chatInput.trim() } })
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {

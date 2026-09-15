@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import { motion } from "framer-motion";
+import { useLocation, useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import Header from "../components/Header";
 import RightPanel from "../components/RightPanel";
@@ -60,6 +62,10 @@ const API_BASE_URL =
 ============================================================ */
 
 export default function Chat() {
+
+  const location = useLocation();
+  const navigate = useNavigate();
+  const submittedRouteQuestion = useRef<string | null>(null);
 
   /* ----------------------------------------------------------
      STATE
@@ -379,10 +385,10 @@ export default function Chat() {
      SEND MESSAGE
   ========================================================== */
 
-  const handleSend = async () => {
+  const handleSend = async (initialMessage?: string) => {
 
     const query =
-      message.trim();
+      (initialMessage ?? message).trim();
 
 
     /* --------------------------------------------------------
@@ -993,6 +999,22 @@ export default function Chat() {
 
   };
 
+  useEffect(() => {
+    const question = location.state?.question;
+
+    if (
+      typeof question === "string" &&
+      question.trim() &&
+      submittedRouteQuestion.current !== question &&
+      messages.length === 0 &&
+      !loading
+    ) {
+      submittedRouteQuestion.current = question;
+      navigate("/chat", { replace: true, state: null });
+      void handleSend(question);
+    }
+  }, [location.state, loading, messages.length]);
+
 
   /* ==========================================================
      KEYBOARD
@@ -1064,7 +1086,12 @@ export default function Chat() {
 
         <div className="flex min-h-0 flex-1">
           <main className="scrollbar-hidden flex min-h-0 flex-1 flex-col overflow-y-auto bg-background">
-            <div className="flex min-h-0 flex-1 flex-col">
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
+              className="flex min-h-0 flex-1 flex-col"
+            >
               <div className="shrink-0 border-b border-border bg-card px-8 py-5">
                 <div className="flex items-center">
                   <div className="flex items-center gap-3">
@@ -1426,7 +1453,7 @@ export default function Chat() {
 
                       <button
                         type="button"
-                        onClick={handleSend}
+                        onClick={() => void handleSend()}
                         disabled={!message.trim() || loading}
                         className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-[11px] font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                       >
@@ -1446,7 +1473,7 @@ export default function Chat() {
                   </p>
                 </div>
               </div>
-            </div>
+            </motion.div>
           </main>
 
           <RightPanel />
