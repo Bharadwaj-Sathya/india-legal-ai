@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Iterable
 
 from langchain_core.documents import Document
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama import ChatOllama
 
 
@@ -12,195 +11,17 @@ from langchain_ollama import ChatOllama
 # ============================================================
 
 DEFAULT_MODEL = "llama3.2"
+DEFAULT_TEMPERATURE = 0.0
 
 
 # ============================================================
-# SYSTEM PROMPT
-# ============================================================
-
-SYSTEM_PROMPT = """
-You are a legal information assistant for an Indian legal document
-retrieval system.
-
-============================================================
-ABSOLUTE GROUNDING RULE
-============================================================
-
-Answer ONLY from the retrieved legal context.
-
-Never use your pretrained/general legal knowledge.
-
-Never infer missing legal information.
-
-Never convert a legal duty, procedure, restriction, power,
-condition, or exception into a "right" unless the retrieved text
-explicitly establishes that right.
-
-============================================================
-LEGAL PROVISION CLASSIFICATION
-============================================================
-
-Before describing each section, determine what the retrieved text
-actually establishes.
-
-Possible classifications include:
-
-- RIGHT / ENTITLEMENT
-- DUTY / OBLIGATION
-- PROCEDURE
-- RESTRICTION / LIMITATION
-- POWER / DISCRETION
-- CONDITION
-- EXCEPTION
-- PROHIBITION
-- PERMISSION
-
-Preserve the classification in the answer.
-
-For example:
-
-If the provision says that a police officer "shall not detain"
-a person beyond a specified period, describe it as a restriction
-or limitation on detention.
-
-DO NOT describe it as:
-
-"You have a right to be detained for that period."
-
-If a provision says that a person "shall be taken before"
-a Magistrate, describe it as a statutory procedure or duty.
-
-DO NOT automatically describe it as:
-
-"You have a right to be taken before a Magistrate."
-
-If a provision says that a Magistrate "shall" take an action
-when specified conditions are satisfied, preserve those conditions.
-
-If a provision contains "unless", "if", "subject to", "provided",
-"except", or similar language, include the relevant condition or
-exception.
-
-============================================================
-NO INFERENCE
-============================================================
-
-Do NOT use phrases such as:
-
-- "it is implied"
-- "this implies"
-- "it can be inferred"
-- "generally this means"
-- "this means that the person has a right"
-- "in practice"
-- "under general law"
-- "commonly understood"
-- "as a general legal principle"
-
-unless the retrieved text itself explicitly supports that
-statement.
-
-============================================================
-SECTION 54 EXAMPLE
-============================================================
-
-If the retrieved text for Section 54 says that an arrested person
-may request an examination when specified conditions are satisfied,
-describe those conditions.
-
-Do NOT summarize Section 54 simply as:
-
-"The arrested person has an unconditional right to medical
-examination."
-
-============================================================
-SECTION 57 EXAMPLE
-============================================================
-
-If the retrieved text says:
-
-"No police officer shall detain..."
-
-describe this as a limitation on police detention.
-
-Do NOT say:
-
-"The person has a right to be detained for 24 hours."
-
-Also preserve the exception involving a special order under
-Section 167 and the exclusion of journey time where stated in
-the retrieved text.
-
-============================================================
-SECTION 56 EXAMPLE
-============================================================
-
-If the retrieved text states that a person arrested is to be
-taken before a Magistrate or officer in charge, describe the
-statutory procedure/duty.
-
-Do NOT automatically call it a personal "right" unless the
-retrieved text explicitly uses or establishes that entitlement.
-
-============================================================
-INCOMPLETE CONTEXT
-============================================================
-
-If the retrieved text is incomplete, do not reconstruct the
-missing portion.
-
-Do not use outside knowledge to complete it.
-
-Clearly state that the retrieved context is incomplete when
-necessary.
-
-============================================================
-MULTIPLE SECTIONS
-============================================================
-
-You may combine multiple retrieved provisions.
-
-For every important legal claim:
-
-1. Identify the section.
-2. State what the provision actually establishes.
-3. Preserve its conditions and exceptions.
-4. Do not change the legal classification.
-
-============================================================
-ANSWER STYLE
-============================================================
-
-Keep the answer concise and factual.
-
-Use this structure when appropriate:
-
-Section XX — [what the provision establishes]
-
-Explain only what is explicitly supported by the retrieved text.
-
-If the retrieved context does not contain enough information
-to answer the question, say so.
-
-Answer ONLY from the supplied legal context.
-"""
-# ============================================================
-# LOCAL OLLAMA LLM
+# LLM
 # ============================================================
 
 def create_llm(
     model: str = DEFAULT_MODEL,
-    temperature: float = 0,
+    temperature: float = DEFAULT_TEMPERATURE,
 ) -> ChatOllama:
-    """
-    Create the local Ollama language model.
-
-    Default model:
-        llama3.2
-
-    This does NOT require an OpenAI API key.
-    """
-
     return ChatOllama(
         model=model,
         temperature=temperature,
@@ -208,98 +29,280 @@ def create_llm(
 
 
 # ============================================================
-# PROMPT
+# FORMAT RETRIEVED SOURCES
 # ============================================================
 
-def create_prompt() -> ChatPromptTemplate:
+def format_sources(documents: Iterable[Document]) -> str:
     """
-    Create the prompt used by the legal RAG generator.
-    """
-
-    return ChatPromptTemplate.from_messages(
-        [
-            (
-                "system",
-                SYSTEM_PROMPT,
-            ),
-            (
-                "human",
-                """
-Legal context retrieved from the document database:
-
-{context}
-
---------------------------------------------------
-
-User question:
-
-{question}
-
---------------------------------------------------
-
-Instructions:
-
-Answer the user's question using only the legal context above.
-
-If the context does not contain sufficient information, say so
-clearly instead of using outside knowledge.
-
-Answer:
-""",
-            ),
-        ]
-    )
-
-
-# ============================================================
-# DOCUMENT FORMATTING
-# ============================================================
-
-def format_documents(
-    documents: list[Document],
-) -> str:
-    """
-    Convert retrieved LangChain documents into a structured
-    context string for the LLM.
+    Convert retrieved documents into clearly separated sources.
     """
 
-    if not documents:
-        return "No legal documents were retrieved."
-
-    formatted: list[str] = []
+    formatted = []
 
     for index, document in enumerate(documents, start=1):
-
         metadata = document.metadata or {}
 
-        act = metadata.get("act", "unknown")
-        section = metadata.get("section", "unknown")
-        chapter = metadata.get("chapter", "unknown")
-        category = metadata.get("category", "unknown")
-        page = metadata.get("page", "unknown")
-        source_file = metadata.get("source_file", "unknown")
-        chunk_id = metadata.get("chunk_id", "unknown")
-
-        source = (
-            f"Source {index}\n"
-            f"Act: {act}\n"
-            f"Section: {section}\n"
-            f"Chapter: {chapter}\n"
-            f"Category: {category}\n"
-            f"Page: {page}\n"
-            f"Source file: {source_file}\n"
-            f"Chunk ID: {chunk_id}\n"
+        act = metadata.get("act", "Unknown Act")
+        section = metadata.get("section", "Unknown Section")
+        title = metadata.get("section_title", "")
+        chapter = metadata.get("chapter", "")
+        page = metadata.get(
+            "page",
+            metadata.get("start_page", "Unknown"),
         )
 
         content = document.page_content.strip()
 
         formatted.append(
-            f"{source}\n"
-            f"Text:\n"
-            f"{content}"
+            f"""
+============================================================
+SOURCE {index}
+============================================================
+
+**Act:** {act}
+
+**Section:** {section}
+
+**Title:** {title}
+
+**Chapter:** {chapter}
+
+**Page:** {page}
+
+### Legal Text
+
+{content}
+
+============================================================
+END SOURCE {index}
+============================================================
+""".strip()
         )
 
-    return "\n\n==============================\n\n".join(formatted)
+    return "\n\n".join(formatted)
+
+
+# ============================================================
+# SYSTEM PROMPT
+# ============================================================
+
+SYSTEM_PROMPT = """
+You are an Indian Legal AI assistant.
+
+Your task is to answer the user's question using ONLY the
+retrieved legal sources provided below.
+
+Your response MUST be valid Markdown.
+
+============================================================
+STRICT SOURCE ISOLATION
+============================================================
+
+Each SOURCE is an independent legal document.
+
+Follow these rules:
+
+1. Every legal claim must be supported by the exact source
+   containing that claim.
+
+2. Never mix information from different sections.
+
+3. Never attribute information from Section 54 to Section 46,
+   or from one Act to another Act.
+
+4. The Act and Section mentioned for a claim must belong to
+   the same source containing the supporting text.
+
+5. Do not use outside legal knowledge.
+
+6. Do not invent missing information.
+
+7. Do not infer a legal right when the source only describes:
+   - a police duty
+   - a procedure
+   - a restriction
+   - a power
+   - an obligation
+
+8. Preserve conditions and exceptions from the source.
+
+9. Words such as:
+   - shall
+   - may
+   - unless
+   - where
+   - if
+   - without warrant
+   - subject to
+   - non-bailable offence
+
+   must not be removed if they affect the legal meaning.
+
+10. If the retrieved sources do not establish something,
+    explicitly say that the retrieved text does not establish it.
+
+============================================================
+LEGAL ACCURACY
+============================================================
+
+Be especially careful with:
+
+- arrest
+- detention
+- bail
+- grounds of arrest
+- medical examination
+- production before Magistrate
+- warrant and warrantless arrest
+- bailable and non-bailable offences
+- police powers
+- statutory duties
+- statutory rights
+
+Do not call something an unconditional "right" unless the
+provided legal text supports that characterization.
+
+============================================================
+MARKDOWN RESPONSE FORMAT
+============================================================
+
+Always structure the answer using Markdown.
+
+For a legal question, prefer this structure:
+
+## Answer
+
+Short direct answer.
+
+### Relevant Provisions
+
+- **Section X — [Act]**
+  - Explanation based only on the retrieved text.
+
+- **Section Y — [Act]**
+  - Explanation based only on the retrieved text.
+
+### What This Means
+
+Explain the practical meaning in simple language.
+
+### Important Conditions
+
+Mention conditions, exceptions, or limitations explicitly
+present in the retrieved text.
+
+### Sources
+
+List the sections used in the answer.
+
+Use:
+
+- `##` for major headings
+- `###` for subheadings
+- `**bold**` for section numbers and important terms
+- bullet points for separate legal points
+- numbered lists for procedures
+- tables only when they make the information clearer
+
+Do NOT use HTML.
+
+Do NOT return JSON.
+
+Do NOT wrap the entire answer inside a code block.
+
+============================================================
+SECTION ATTRIBUTION
+============================================================
+
+Always identify the relevant Act and Section.
+
+For example:
+
+**Section 50 of the Code of Criminal Procedure, 1973** states
+that ...
+
+Do not attribute a statement to a section unless that exact
+source contains the statement.
+
+============================================================
+NO HALLUCINATION
+============================================================
+
+Never invent:
+
+- section numbers
+- legal rights
+- legal procedures
+- punishments
+- exceptions
+- case law
+- court decisions
+- constitutional provisions
+
+If the retrieved information is insufficient, say:
+
+> The retrieved legal text does not provide enough information
+> to answer this part.
+
+============================================================
+DISCLAIMER
+============================================================
+
+End the response with:
+
+> **Note:** This answer is based only on the retrieved statutory
+> text and is for legal information purposes, not a substitute
+> for advice from a qualified lawyer.
+"""
+
+
+# ============================================================
+# BUILD PROMPT
+# ============================================================
+
+def build_prompt(
+    query: str,
+    documents: list[Document],
+) -> str:
+
+    context = format_sources(documents)
+
+    return f"""
+{SYSTEM_PROMPT}
+
+============================================================
+USER QUESTION
+============================================================
+
+{query}
+
+============================================================
+RETRIEVED LEGAL SOURCES
+============================================================
+
+{context}
+
+============================================================
+FINAL INSTRUCTIONS
+============================================================
+
+Answer the user's question now.
+
+Return ONLY the final Markdown answer.
+
+Before making every legal claim, verify:
+
+1. Which SOURCE contains the claim?
+2. Which Act does that SOURCE belong to?
+3. Which Section does that SOURCE belong to?
+4. Does the source actually support the claim?
+5. Are there conditions or exceptions?
+6. Am I accidentally using information from another section?
+
+Do not mix sources.
+
+Return Markdown, not JSON.
+"""
 
 
 # ============================================================
@@ -309,75 +312,70 @@ def format_documents(
 def generate_answer(
     query: str,
     documents: list[Document],
-    llm: ChatOllama | None = None,
-) -> dict[str, Any]:
-    """
-    Generate a legal answer from retrieved documents.
+    llm: ChatOllama,
+) -> str:
 
-    Parameters
-    ----------
-    query:
-        User's legal question.
-
-    documents:
-        Documents retrieved from Chroma.
-
-    llm:
-        Optional Ollama LLM instance.
-
-    Returns
-    -------
-    dict
-        {
-            "answer": "...",
-            "documents": [...]
-        }
-    """
-
-    # --------------------------------------------------------
-    # Create LLM if one was not provided
-    # --------------------------------------------------------
-
-    if llm is None:
-        llm = create_llm(
-            model=DEFAULT_MODEL,
-            temperature=0,
+    if not documents:
+        return (
+            "## Answer\n\n"
+            "I could not find relevant legal provisions in the "
+            "retrieved documents."
         )
 
-    # --------------------------------------------------------
-    # Create prompt
-    # --------------------------------------------------------
-
-    prompt = create_prompt()
-
-    # --------------------------------------------------------
-    # Format retrieved documents
-    # --------------------------------------------------------
-
-    context = format_documents(documents)
-
-    # --------------------------------------------------------
-    # Build messages
-    # --------------------------------------------------------
-
-    messages = prompt.invoke(
-        {
-            "context": context,
-            "question": query,
-        }
+    prompt = build_prompt(
+        query=query,
+        documents=documents,
     )
 
-    # --------------------------------------------------------
-    # Generate answer using Ollama
-    # --------------------------------------------------------
+    response = llm.invoke(prompt)
 
-    response = llm.invoke(messages)
+    if hasattr(response, "content"):
+        answer = str(response.content).strip()
+    else:
+        answer = str(response).strip()
 
-    # --------------------------------------------------------
-    # Return answer + sources
-    # --------------------------------------------------------
+    return answer
 
-    return {
-        "answer": response.content,
-        "documents": documents,
-    }
+
+# ============================================================
+# OPTIONAL HELPER
+# ============================================================
+
+def generate_answer_from_text(
+    query: str,
+    context: str,
+    llm: ChatOllama,
+) -> str:
+
+    prompt = f"""
+{SYSTEM_PROMPT}
+
+============================================================
+USER QUESTION
+============================================================
+
+{query}
+
+============================================================
+LEGAL SOURCES
+============================================================
+
+{context}
+
+============================================================
+FINAL ANSWER
+============================================================
+
+Return ONLY a Markdown answer.
+
+Do not mix information between sections.
+Do not infer legal rights.
+Do not invent information.
+"""
+
+    response = llm.invoke(prompt)
+
+    if hasattr(response, "content"):
+        return str(response.content).strip()
+
+    return str(response).strip()

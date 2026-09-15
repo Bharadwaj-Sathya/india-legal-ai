@@ -1,8 +1,8 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import HomePage from './pages/HomePage'
+import ChatPage from './pages/ChatPage'
 
 // Future pages — stub components until implemented
-const ChatPage = () => <div>Chat</div>
 const BrowseLawsPage = () => <div>Browse Laws</div>
 const CompareLawsPage = () => <div>Compare Laws</div>
 const SavedPage = () => <div>Saved</div>
