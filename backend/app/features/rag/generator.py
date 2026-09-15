@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable
+from typing import Iterable, Iterator
 
 from langchain_core.documents import Document
 from langchain_ollama import ChatOllama
@@ -15,13 +15,14 @@ DEFAULT_TEMPERATURE = 0.0
 
 
 # ============================================================
-# LLM
+# CREATE LLM
 # ============================================================
 
 def create_llm(
     model: str = DEFAULT_MODEL,
     temperature: float = DEFAULT_TEMPERATURE,
 ) -> ChatOllama:
+
     return ChatOllama(
         model=model,
         temperature=temperature,
@@ -29,26 +30,48 @@ def create_llm(
 
 
 # ============================================================
-# FORMAT RETRIEVED SOURCES
+# FORMAT SOURCES
 # ============================================================
 
-def format_sources(documents: Iterable[Document]) -> str:
-    """
-    Convert retrieved documents into clearly separated sources.
-    """
+def format_sources(
+    documents: Iterable[Document],
+) -> str:
 
     formatted = []
 
-    for index, document in enumerate(documents, start=1):
+    for index, document in enumerate(
+        documents,
+        start=1,
+    ):
+
         metadata = document.metadata or {}
 
-        act = metadata.get("act", "Unknown Act")
-        section = metadata.get("section", "Unknown Section")
-        title = metadata.get("section_title", "")
-        chapter = metadata.get("chapter", "")
+        act = metadata.get(
+            "act",
+            "Unknown Act",
+        )
+
+        section = metadata.get(
+            "section",
+            "Unknown Section",
+        )
+
+        title = metadata.get(
+            "section_title",
+            "",
+        )
+
+        chapter = metadata.get(
+            "chapter",
+            "",
+        )
+
         page = metadata.get(
             "page",
-            metadata.get("start_page", "Unknown"),
+            metadata.get(
+                "start_page",
+                "Unknown",
+            ),
         )
 
         content = document.page_content.strip()
@@ -100,8 +123,6 @@ STRICT SOURCE ISOLATION
 
 Each SOURCE is an independent legal document.
 
-Follow these rules:
-
 1. Every legal claim must be supported by the exact source
    containing that claim.
 
@@ -126,7 +147,7 @@ Follow these rules:
 
 8. Preserve conditions and exceptions from the source.
 
-9. Words such as:
+9. Do not remove qualifying words such as:
    - shall
    - may
    - unless
@@ -136,10 +157,8 @@ Follow these rules:
    - subject to
    - non-bailable offence
 
-   must not be removed if they affect the legal meaning.
-
 10. If the retrieved sources do not establish something,
-    explicitly say that the retrieved text does not establish it.
+    say that the retrieved text does not establish it.
 
 ============================================================
 LEGAL ACCURACY
@@ -163,66 +182,44 @@ Do not call something an unconditional "right" unless the
 provided legal text supports that characterization.
 
 ============================================================
-MARKDOWN RESPONSE FORMAT
+MARKDOWN FORMAT
 ============================================================
 
-Always structure the answer using Markdown.
+Use Markdown.
 
-For a legal question, prefer this structure:
+Prefer:
 
-## Answer
-
-Short direct answer.
 
 ### Relevant Provisions
 
-- **Section X — [Act]**
-  - Explanation based only on the retrieved text.
-
-- **Section Y — [Act]**
-  - Explanation based only on the retrieved text.
+- **Section X — Act**
+  - Explanation.
 
 ### What This Means
 
-Explain the practical meaning in simple language.
+Practical explanation.
 
 ### Important Conditions
 
-Mention conditions, exceptions, or limitations explicitly
-present in the retrieved text.
+Conditions and exceptions.
 
 ### Sources
 
-List the sections used in the answer.
+Relevant sections.
 
 Use:
 
-- `##` for major headings
-- `###` for subheadings
-- `**bold**` for section numbers and important terms
-- bullet points for separate legal points
-- numbered lists for procedures
-- tables only when they make the information clearer
-
-Do NOT use HTML.
+- headings
+- bold text
+- bullet points
+- numbered lists
+- blockquotes where useful
 
 Do NOT return JSON.
 
-Do NOT wrap the entire answer inside a code block.
+Do NOT return HTML.
 
-============================================================
-SECTION ATTRIBUTION
-============================================================
-
-Always identify the relevant Act and Section.
-
-For example:
-
-**Section 50 of the Code of Criminal Procedure, 1973** states
-that ...
-
-Do not attribute a statement to a section unless that exact
-source contains the statement.
+Do NOT put the entire answer inside a code block.
 
 ============================================================
 NO HALLUCINATION
@@ -232,7 +229,7 @@ Never invent:
 
 - section numbers
 - legal rights
-- legal procedures
+- procedures
 - punishments
 - exceptions
 - case law
@@ -241,8 +238,8 @@ Never invent:
 
 If the retrieved information is insufficient, say:
 
-> The retrieved legal text does not provide enough information
-> to answer this part.
+"The retrieved legal text does not provide enough information
+to answer this part."
 
 ============================================================
 DISCLAIMER
@@ -306,7 +303,7 @@ Return Markdown, not JSON.
 
 
 # ============================================================
-# GENERATE ANSWER
+# NORMAL GENERATION
 # ============================================================
 
 def generate_answer(
@@ -316,10 +313,11 @@ def generate_answer(
 ) -> str:
 
     if not documents:
+
         return (
             "## Answer\n\n"
-            "I could not find relevant legal provisions in the "
-            "retrieved documents."
+            "I could not find relevant information "
+            "in the provided legal documents."
         )
 
     prompt = build_prompt(
@@ -330,52 +328,52 @@ def generate_answer(
     response = llm.invoke(prompt)
 
     if hasattr(response, "content"):
-        answer = str(response.content).strip()
-    else:
-        answer = str(response).strip()
-
-    return answer
-
-
-# ============================================================
-# OPTIONAL HELPER
-# ============================================================
-
-def generate_answer_from_text(
-    query: str,
-    context: str,
-    llm: ChatOllama,
-) -> str:
-
-    prompt = f"""
-{SYSTEM_PROMPT}
-
-============================================================
-USER QUESTION
-============================================================
-
-{query}
-
-============================================================
-LEGAL SOURCES
-============================================================
-
-{context}
-
-============================================================
-FINAL ANSWER
-============================================================
-
-Return ONLY a Markdown answer.
-
-Do not mix information between sections.
-Do not infer legal rights.
-Do not invent information.
-"""
-
-    response = llm.invoke(prompt)
-
-    if hasattr(response, "content"):
-        return str(response.content).strip()
+        return str(
+            response.content
+        ).strip()
 
     return str(response).strip()
+
+
+# ============================================================
+# STREAMING GENERATION
+# ============================================================
+
+def stream_answer(
+    query: str,
+    documents: list[Document],
+    llm: ChatOllama,
+) -> Iterator[str]:
+
+    if not documents:
+
+        yield (
+            "## Answer\n\n"
+            "I could not find relevant information "
+            "in the provided legal documents."
+        )
+
+        return
+
+    prompt = build_prompt(
+        query=query,
+        documents=documents,
+    )
+
+    # --------------------------------------------------------
+    # Ollama streaming
+    # --------------------------------------------------------
+
+    for chunk in llm.stream(prompt):
+
+        if hasattr(chunk, "content"):
+
+            content = chunk.content
+
+        else:
+
+            content = str(chunk)
+
+        if content:
+
+            yield content

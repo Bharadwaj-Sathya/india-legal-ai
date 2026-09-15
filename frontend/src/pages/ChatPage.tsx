@@ -34,21 +34,17 @@ interface SourceDocument {
   chunk_id?: number | null;
 }
 
-interface RAGResponse {
-  query: string;
-  answer: string;
-  sources: SourceDocument[];
-}
 
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   sources?: SourceDocument[];
+  streaming?: boolean;
 }
 
 
 /* ============================================================
-   API CONFIGURATION
+   API CONFIG
 ============================================================ */
 
 const API_BASE_URL =
@@ -68,35 +64,41 @@ export default function Chat() {
 
   const [message, setMessage] = useState("");
 
-  const [messages, setMessages] = useState<ChatMessage[]>(
-    []
-  );
+  const [messages, setMessages] =
+    useState<ChatMessage[]>([]);
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] =
+    useState(false);
 
-  const [error, setError] = useState("");
+  const [error, setError] =
+    useState("");
 
 
   /* ==========================================================
-     SEND QUERY TO BACKEND
+     SEND MESSAGE
   ========================================================== */
 
   const handleSend = async () => {
 
-    const query = message.trim();
+    const query =
+      message.trim();
 
-    // Don't send empty messages
+
+    /* --------------------------------------------------------
+       VALIDATION
+    -------------------------------------------------------- */
+
     if (!query) {
       return;
     }
 
-    // Don't send another request while one is running
     if (loading) {
       return;
     }
 
+
     console.log(
-      "================================================"
+      "============================================"
     );
 
     console.log(
@@ -106,86 +108,111 @@ export default function Chat() {
     console.log(query);
 
     console.log(
-      "API:",
-      `${API_BASE_URL}/api/v1/rag/query`
+      "Endpoint:",
+      `${API_BASE_URL}/api/v1/rag/query/stream`
     );
 
     console.log(
-      "================================================"
+      "============================================"
     );
 
 
-    // Clear previous error
+    /* --------------------------------------------------------
+       RESET
+    -------------------------------------------------------- */
+
     setError("");
 
+    setMessage("");
 
-    // Add user message to UI
+    setLoading(true);
+
+
+    /* --------------------------------------------------------
+       ADD USER + ONE ASSISTANT MESSAGE
+       
+       IMPORTANT:
+       Only ONE assistant message is created.
+       The loading indicator lives inside it.
+    -------------------------------------------------------- */
+
     setMessages((previous) => [
+
       ...previous,
+
       {
         role: "user",
         content: query,
       },
+
+      {
+        role: "assistant",
+        content: "",
+        sources: [],
+        streaming: true,
+      },
+
     ]);
-
-
-    // Clear input
-    setMessage("");
-
-    // Show loading
-    setLoading(true);
 
 
     try {
 
-      /* ------------------------------------------------------
-         API REQUEST
-      ------------------------------------------------------ */
+      /* ======================================================
+         SEND REQUEST
+      ====================================================== */
 
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/rag/query`,
-        {
-          method: "POST",
+      const response =
+        await fetch(
+          `${API_BASE_URL}/api/v1/rag/query/stream`,
+          {
+            method: "POST",
 
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
+            headers: {
+              "Content-Type":
+                "application/json",
 
-          body: JSON.stringify({
-            query: query,
+              Accept:
+                "text/event-stream",
+            },
 
-            // Number of documents to retrieve
-            k: 5,
+            body: JSON.stringify({
 
-            // IMPORTANT:
-            // null means search across all indexed Acts.
-            // Do NOT force crpc_1973 for every question.
-            act: null,
-          }),
-        }
-      );
+              query: query,
+
+              k: 5,
+
+              /*
+               * null means:
+               * Search across all Acts.
+               */
+              act: null,
+
+            }),
+          }
+        );
 
 
       console.log(
-        "Backend HTTP status:",
+        "Backend status:",
         response.status
       );
 
 
-      /* ------------------------------------------------------
-         HANDLE HTTP ERROR
-      ------------------------------------------------------ */
+      /* ======================================================
+         HTTP ERROR
+      ====================================================== */
 
       if (!response.ok) {
 
         let errorMessage =
           `Backend returned HTTP ${response.status}`;
 
+
         try {
 
           const errorData =
             await response.json();
+
 
           if (errorData?.detail) {
 
@@ -195,70 +222,412 @@ export default function Chat() {
                 : JSON.stringify(
                     errorData.detail
                   );
+
           }
 
         } catch {
-          // Backend did not return JSON
+          // Ignore JSON parse errors
         }
+
 
         throw new Error(
           errorMessage
         );
+
       }
 
 
-      /* ------------------------------------------------------
-         PARSE RESPONSE
-      ------------------------------------------------------ */
+      /* ======================================================
+         STREAM CHECK
+      ====================================================== */
 
-      const data: RAGResponse =
-        await response.json();
-
-
-      console.log(
-        "Backend response:",
-        data
-      );
-
-
-      /* ------------------------------------------------------
-         VALIDATE ANSWER
-      ------------------------------------------------------ */
-
-      if (
-        !data ||
-        typeof data.answer !== "string"
-      ) {
+      if (!response.body) {
 
         throw new Error(
-          "Backend returned an invalid RAG response."
+          "Backend did not return a streaming response."
         );
+
       }
 
 
-      /* ------------------------------------------------------
-         ADD AI RESPONSE
-      ------------------------------------------------------ */
+      /* ======================================================
+         CREATE STREAM READER
+      ====================================================== */
 
-      setMessages((previous) => [
-        ...previous,
-        {
-          role: "assistant",
+      const reader =
+        response.body.getReader();
 
-          content: data.answer,
 
-          sources:
-            Array.isArray(data.sources)
-              ? data.sources
-              : [],
-        },
-      ]);
+      const decoder =
+        new TextDecoder();
+
+
+      let buffer = "";
+
+
+      /* ======================================================
+         READ STREAM
+      ====================================================== */
+
+      while (true) {
+
+        const {
+          value,
+          done,
+        } =
+          await reader.read();
+
+
+        /* ----------------------------------------------------
+           Stream finished
+        ---------------------------------------------------- */
+
+        if (done) {
+          break;
+        }
+
+
+        /* ----------------------------------------------------
+           Decode bytes
+        ---------------------------------------------------- */
+
+        buffer +=
+          decoder.decode(
+            value,
+            {
+              stream: true,
+            }
+          );
+
+
+        /* ----------------------------------------------------
+           SSE events use:
+
+           \n\n
+
+           as separator.
+        ---------------------------------------------------- */
+
+        const events =
+          buffer.split(
+            "\n\n"
+          );
+
+
+        /*
+         * Last item may be incomplete.
+         */
+        buffer =
+          events.pop() || "";
+
+
+        /* ====================================================
+           PROCESS EACH EVENT
+        ==================================================== */
+
+        for (
+          const event of events
+        ) {
+
+          if (!event.trim()) {
+            continue;
+          }
+
+
+          const lines =
+            event.split("\n");
+
+
+          let eventType =
+            "message";
+
+
+          let eventData =
+            "";
+
+
+          /* --------------------------------------------------
+             Parse SSE
+          -------------------------------------------------- */
+
+          for (
+            const line of lines
+          ) {
+
+            if (
+              line.startsWith(
+                "event:"
+              )
+            ) {
+
+              eventType =
+                line
+                  .substring(6)
+                  .trim();
+
+            }
+
+
+            if (
+              line.startsWith(
+                "data:"
+              )
+            ) {
+
+              /*
+               * Don't add extra spaces here.
+               * The backend controls token spacing.
+               */
+              eventData +=
+                line
+                  .substring(5)
+                  .trim();
+
+            }
+
+          }
+
+
+          /* ==================================================
+             SOURCES EVENT
+          ================================================== */
+
+          if (
+            eventType ===
+            "sources"
+          ) {
+
+            try {
+
+              const sources:
+                SourceDocument[] =
+                JSON.parse(
+                  eventData
+                );
+
+
+              setMessages(
+                (previous) => {
+
+                  const updated =
+                    [...previous];
+
+
+                  const lastIndex =
+                    updated.length - 1;
+
+
+                  /*
+                   * Update the existing
+                   * assistant message.
+                   */
+
+                  if (
+                    updated[lastIndex]
+                      ?.role ===
+                    "assistant"
+                  ) {
+
+                    updated[lastIndex] = {
+
+                      ...updated[lastIndex],
+
+                      sources:
+                        sources,
+
+                    };
+
+                  }
+
+
+                  return updated;
+
+                }
+              );
+
+
+            } catch (sourceError) {
+
+              console.error(
+                "Source parsing failed:",
+                sourceError
+              );
+
+            }
+
+          }
+
+
+          /* ==================================================
+             TOKEN EVENT
+          ================================================== */
+
+          if (
+            eventType ===
+            "token"
+          ) {
+
+            let token =
+              "";
+
+
+            try {
+
+              token =
+                JSON.parse(
+                  eventData
+                );
+
+            } catch {
+
+              token =
+                eventData;
+
+            }
+
+
+            if (!token) {
+              continue;
+            }
+
+
+            /* ------------------------------------------------
+               Append token to SAME assistant message
+            ------------------------------------------------ */
+
+            setMessages(
+              (previous) => {
+
+                const updated =
+                  [...previous];
+
+
+                const lastIndex =
+                  updated.length - 1;
+
+
+                if (
+                  updated[lastIndex]
+                    ?.role ===
+                  "assistant"
+                ) {
+
+                  updated[lastIndex] = {
+
+                    ...updated[lastIndex],
+
+                    content:
+                      updated[lastIndex]
+                        .content +
+                      token,
+
+                    streaming:
+                      true,
+
+                  };
+
+                }
+
+
+                return updated;
+
+              }
+            );
+
+          }
+
+
+          /* ==================================================
+             ERROR EVENT
+          ================================================== */
+
+          if (
+            eventType ===
+            "error"
+          ) {
+
+            let errorMessage =
+              eventData;
+
+
+            try {
+
+              errorMessage =
+                JSON.parse(
+                  eventData
+                );
+
+            } catch {
+              // Keep raw value
+            }
+
+
+            throw new Error(
+              errorMessage
+            );
+
+          }
+
+
+          /* ==================================================
+             DONE EVENT
+          ================================================== */
+
+          if (
+            eventType ===
+            "done"
+          ) {
+
+            console.log(
+              "SSE streaming completed."
+            );
+
+
+            setMessages(
+              (previous) => {
+
+                const updated =
+                  [...previous];
+
+
+                const lastIndex =
+                  updated.length - 1;
+
+
+                if (
+                  updated[lastIndex]
+                    ?.role ===
+                  "assistant"
+                ) {
+
+                  updated[lastIndex] = {
+
+                    ...updated[lastIndex],
+
+                    streaming:
+                      false,
+
+                  };
+
+                }
+
+
+                return updated;
+
+              }
+            );
+
+          }
+
+        }
+
+      }
 
 
     } catch (err) {
 
       console.error(
-        "RAG request failed:",
+        "SSE request failed:",
         err
       );
 
@@ -266,7 +635,7 @@ export default function Chat() {
       const errorMessage =
         err instanceof Error
           ? err.message
-          : "Unable to connect to the backend.";
+          : "Unable to connect to backend.";
 
 
       setError(
@@ -274,19 +643,56 @@ export default function Chat() {
       );
 
 
+      /* ------------------------------------------------------
+         Remove empty assistant message
+      ------------------------------------------------------ */
+
+      setMessages(
+        (previous) => {
+
+          const updated =
+            [...previous];
+
+
+          const lastIndex =
+            updated.length - 1;
+
+
+          if (
+            updated[lastIndex]
+              ?.role ===
+              "assistant" &&
+            !updated[lastIndex]
+              .content
+          ) {
+
+            updated.pop();
+
+          }
+
+
+          return updated;
+
+        }
+      );
+
+
     } finally {
 
       setLoading(false);
+
     }
+
   };
 
 
   /* ==========================================================
-     ENTER KEY
+     KEYBOARD
   ========================================================== */
 
   const handleKeyDown = (
-    event: React.KeyboardEvent<HTMLTextAreaElement>
+    event:
+      React.KeyboardEvent<HTMLTextAreaElement>
   ) => {
 
     if (
@@ -297,7 +703,9 @@ export default function Chat() {
       event.preventDefault();
 
       handleSend();
+
     }
+
   };
 
 
@@ -314,6 +722,7 @@ export default function Chat() {
     setError("");
 
     setLoading(false);
+
   };
 
 
@@ -325,7 +734,10 @@ export default function Chat() {
     question: string
   ) => {
 
-    setMessage(question);
+    setMessage(
+      question
+    );
+
   };
 
 
@@ -378,16 +790,19 @@ export default function Chat() {
 
         <nav className="px-2">
 
-
           <SidebarItem
-            icon={<Search size={17} />}
+            icon={
+              <Search size={17} />
+            }
             label="Home"
             href="/"
           />
 
 
           <SidebarItem
-            icon={<MessageSquare size={17} />}
+            icon={
+              <MessageSquare size={17} />
+            }
             label="Chat"
             href="/chat"
             active
@@ -395,28 +810,36 @@ export default function Chat() {
 
 
           <SidebarItem
-            icon={<FileText size={17} />}
+            icon={
+              <FileText size={17} />
+            }
             label="Browse Laws"
             href="/browse-laws"
           />
 
 
           <SidebarItem
-            icon={<Scale size={17} />}
+            icon={
+              <Scale size={17} />
+            }
             label="Compare Laws"
             href="/compare-laws"
           />
 
 
           <SidebarItem
-            icon={<Bookmark size={17} />}
+            icon={
+              <Bookmark size={17} />
+            }
             label="Saved"
             href="/saved"
           />
 
 
           <SidebarItem
-            icon={<History size={17} />}
+            icon={
+              <History size={17} />
+            }
             label="History"
             href="/history"
           />
@@ -425,7 +848,7 @@ export default function Chat() {
 
 
         {/* ---------------------------------------------------
-            SIDEBAR BOTTOM
+            BOTTOM CARD
         ---------------------------------------------------- */}
 
         <div className="mt-auto p-3">
@@ -495,28 +918,30 @@ export default function Chat() {
           </div>
 
 
-          {/* HEADER ACTIONS */}
+          {/* ACTIONS */}
 
           <div className="ml-auto flex items-center gap-5">
 
-
             <button
-              className="text-slate-600 transition hover:text-slate-900"
-              title="Dark mode"
+              type="button"
+              className="text-slate-600 hover:text-slate-900"
             >
               <Moon size={18} />
             </button>
 
 
             <button
-              className="text-slate-600 transition hover:text-slate-900"
-              title="Notifications"
+              type="button"
+              className="text-slate-600 hover:text-slate-900"
             >
               <Bell size={18} />
             </button>
 
 
-            <button className="flex items-center gap-2">
+            <button
+              type="button"
+              className="flex items-center gap-2"
+            >
 
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#102238] text-[13px] text-white">
                 A
@@ -539,14 +964,14 @@ export default function Chat() {
 
 
         {/* ===================================================
-            CHAT AREA
+            CONTENT
         ==================================================== */}
 
         <div className="flex min-h-0 flex-1">
 
 
           {/* =================================================
-              CHAT COLUMN
+              CHAT
           ================================================== */}
 
           <section className="flex min-w-0 flex-1 flex-col">
@@ -554,9 +979,6 @@ export default function Chat() {
 
             {/* =================================================
                 CHAT HEADER
-
-                Heading LEFT
-                New Chat RIGHT
             ================================================== */}
 
             <div className="shrink-0 border-b border-slate-200 bg-white px-8 py-5">
@@ -564,7 +986,7 @@ export default function Chat() {
               <div className="flex items-center">
 
 
-                {/* LEFT */}
+                {/* LEFT — HEADING */}
 
                 <div className="flex items-center gap-3">
 
@@ -593,9 +1015,10 @@ export default function Chat() {
                 </div>
 
 
-                {/* RIGHT */}
+                {/* RIGHT — NEW CHAT */}
 
                 <button
+                  type="button"
                   onClick={handleNewChat}
                   className="ml-auto flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-[12px] font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
                 >
@@ -617,7 +1040,6 @@ export default function Chat() {
 
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-7">
 
-
               <div className="mx-auto max-w-[900px]">
 
 
@@ -625,7 +1047,7 @@ export default function Chat() {
                     EMPTY STATE
                 ================================================== */}
 
-                {messages.length === 0 && !loading && (
+                {messages.length === 0 && (
 
                   <div className="flex min-h-[400px] flex-col items-center justify-center text-center">
 
@@ -714,21 +1136,28 @@ export default function Chat() {
 
 
                   {messages.map(
-                    (chatMessage, index) => (
+                    (
+                      chatMessage,
+                      index
+                    ) => (
 
                       <div
                         key={index}
                         className={
-                          chatMessage.role === "user"
+                          chatMessage.role ===
+                          "user"
                             ? "flex justify-end"
                             : "flex justify-start"
                         }
                       >
 
 
-                        {/* USER MESSAGE */}
+                        {/* =================================================
+                            USER MESSAGE
+                        ================================================== */}
 
-                        {chatMessage.role === "user" ? (
+                        {chatMessage.role ===
+                        "user" ? (
 
                           <div className="max-w-[75%] rounded-2xl rounded-br-md bg-[#12263a] px-5 py-3 text-[13px] leading-6 text-white shadow-sm">
 
@@ -739,7 +1168,9 @@ export default function Chat() {
                         ) : (
 
 
-                          /* AI MESSAGE */
+                          /* =================================================
+                             ONE AND ONLY ONE AI BOX
+                          ================================================== */
 
                           <div className="w-full max-w-[850px]">
 
@@ -766,8 +1197,13 @@ export default function Chat() {
                                     Indian Legal AI
                                   </p>
 
+
                                   <p className="text-[10px] text-slate-400">
-                                    Based on retrieved legal sources
+
+                                    {chatMessage.streaming
+                                      ? "Generating answer..."
+                                      : "Based on retrieved legal sources"}
+
                                   </p>
 
                                 </div>
@@ -775,86 +1211,164 @@ export default function Chat() {
                               </div>
 
 
-                              {/* MARKDOWN ANSWER */}
+                              {/* =================================================
+                                  LOADING
+                              ================================================== */}
 
-                              <div className="legal-markdown text-[14px] leading-7 text-slate-700">
+                              {chatMessage.streaming &&
+                                !chatMessage.content && (
 
-                                <ReactMarkdown
-                                  components={{
+                                  <div className="flex items-center gap-3 py-2 text-[12px] text-slate-400">
 
-                                    h1: ({ children }) => (
-                                      <h1 className="mb-4 text-xl font-bold text-[#13283d]">
-                                        {children}
-                                      </h1>
-                                    ),
+                                    <Loader2
+                                      size={15}
+                                      className="animate-spin"
+                                    />
 
-                                    h2: ({ children }) => (
-                                      <h2 className="mb-3 mt-5 text-lg font-semibold text-[#13283d]">
-                                        {children}
-                                      </h2>
-                                    ),
+                                    Searching legal sources...
 
-                                    h3: ({ children }) => (
-                                      <h3 className="mb-2 mt-4 text-base font-semibold text-[#13283d]">
-                                        {children}
-                                      </h3>
-                                    ),
+                                  </div>
 
-                                    p: ({ children }) => (
-                                      <p className="mb-3">
-                                        {children}
-                                      </p>
-                                    ),
+                                )}
 
-                                    ul: ({ children }) => (
-                                      <ul className="mb-4 ml-5 list-disc space-y-2">
-                                        {children}
-                                      </ul>
-                                    ),
 
-                                    ol: ({ children }) => (
-                                      <ol className="mb-4 ml-5 list-decimal space-y-2">
-                                        {children}
-                                      </ol>
-                                    ),
+                              {/* =================================================
+                                  MARKDOWN RESPONSE
+                              ================================================== */}
 
-                                    li: ({ children }) => (
-                                      <li className="pl-1">
-                                        {children}
-                                      </li>
-                                    ),
+                              {chatMessage.content && (
 
-                                    strong: ({ children }) => (
-                                      <strong className="font-semibold text-[#13283d]">
-                                        {children}
-                                      </strong>
-                                    ),
+                                <div className="legal-markdown text-[14px] leading-7 text-slate-700">
 
-                                    blockquote: ({ children }) => (
-                                      <blockquote className="my-4 border-l-4 border-slate-300 bg-slate-50 px-4 py-3 text-slate-600">
-                                        {children}
-                                      </blockquote>
-                                    ),
 
-                                    code: ({ children }) => (
-                                      <code className="rounded bg-slate-100 px-1.5 py-0.5 text-[12px]">
-                                        {children}
-                                      </code>
-                                    ),
+                                  <ReactMarkdown
+                                    components={{
 
-                                  }}
-                                >
-                                  {chatMessage.content}
-                                </ReactMarkdown>
+                                      h1: ({
+                                        children,
+                                      }) => (
 
-                              </div>
+                                        <h1 className="mb-4 text-xl font-bold text-[#13283d]">
+                                          {children}
+                                        </h1>
+
+                                      ),
+
+
+                                      h2: ({
+                                        children,
+                                      }) => (
+
+                                        <h2 className="mb-3 mt-5 text-lg font-semibold text-[#13283d]">
+                                          {children}
+                                        </h2>
+
+                                      ),
+
+
+                                      h3: ({
+                                        children,
+                                      }) => (
+
+                                        <h3 className="mb-2 mt-4 text-base font-semibold text-[#13283d]">
+                                          {children}
+                                        </h3>
+
+                                      ),
+
+
+                                      p: ({
+                                        children,
+                                      }) => (
+
+                                        <p className="mb-3">
+                                          {children}
+                                        </p>
+
+                                      ),
+
+
+                                      ul: ({
+                                        children,
+                                      }) => (
+
+                                        <ul className="mb-4 ml-5 list-disc space-y-2">
+                                          {children}
+                                        </ul>
+
+                                      ),
+
+
+                                      ol: ({
+                                        children,
+                                      }) => (
+
+                                        <ol className="mb-4 ml-5 list-decimal space-y-2">
+                                          {children}
+                                        </ol>
+
+                                      ),
+
+
+                                      li: ({
+                                        children,
+                                      }) => (
+
+                                        <li className="pl-1">
+                                          {children}
+                                        </li>
+
+                                      ),
+
+
+                                      strong: ({
+                                        children,
+                                      }) => (
+
+                                        <strong className="font-semibold text-[#13283d]">
+                                          {children}
+                                        </strong>
+
+                                      ),
+
+
+                                      blockquote: ({
+                                        children,
+                                      }) => (
+
+                                        <blockquote className="my-4 border-l-4 border-slate-300 bg-slate-50 px-4 py-3 text-slate-600">
+                                          {children}
+                                        </blockquote>
+
+                                      ),
+
+                                    }}
+                                  >
+
+                                    {chatMessage.content}
+
+                                  </ReactMarkdown>
+
+
+                                  {/* STREAMING CURSOR */}
+
+                                  {chatMessage.streaming && (
+
+                                    <span className="ml-1 inline-block h-4 w-[2px] animate-pulse bg-slate-400 align-middle" />
+
+                                  )}
+
+                                </div>
+
+                              )}
 
 
                               {/* =================================================
                                   SOURCES
                               ================================================== */}
 
-                              {chatMessage.sources &&
+                              {!chatMessage.streaming &&
+                                chatMessage.sources &&
                                 chatMessage.sources.length > 0 && (
 
                                   <div className="mt-6 border-t border-slate-200 pt-5">
@@ -881,7 +1395,9 @@ export default function Chat() {
                                         ) => (
 
                                           <details
-                                            key={sourceIndex}
+                                            key={
+                                              sourceIndex
+                                            }
                                             className="rounded-lg border border-slate-200 bg-slate-50"
                                           >
 
@@ -898,8 +1414,10 @@ export default function Chat() {
                                               {source.act && (
 
                                                 <span className="ml-2 text-slate-400">
+
                                                   ·{" "}
                                                   {source.act}
+
                                                 </span>
 
                                               )}
@@ -913,15 +1431,19 @@ export default function Chat() {
                                               {source.chapter && (
 
                                                 <p className="mb-2 text-[11px] text-slate-400">
+
                                                   Chapter:{" "}
                                                   {source.chapter}
+
                                                 </p>
 
                                               )}
 
 
                                               <p className="whitespace-pre-wrap text-[12px] leading-6 text-slate-600">
+
                                                 {source.content}
+
                                               </p>
 
 
@@ -966,57 +1488,6 @@ export default function Chat() {
                     )
                   )}
 
-
-                  {/* =================================================
-                      LOADING
-                  ================================================== */}
-
-                  {loading && (
-
-                    <div className="flex justify-start">
-
-                      <div className="rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm">
-
-                        <div className="flex items-center gap-3">
-
-                          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#eaf1f8]">
-
-                            <Scale
-                              size={18}
-                              className="text-[#17304a]"
-                            />
-
-                          </div>
-
-
-                          <div>
-
-                            <p className="text-[13px] font-semibold text-slate-700">
-                              Indian Legal AI
-                            </p>
-
-
-                            <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-400">
-
-                              <Loader2
-                                size={13}
-                                className="animate-spin"
-                              />
-
-                              Searching legal sources...
-
-                            </div>
-
-                          </div>
-
-                        </div>
-
-                      </div>
-
-                    </div>
-
-                  )}
-
                 </div>
 
 
@@ -1058,12 +1529,16 @@ export default function Chat() {
 
                   <textarea
                     value={message}
-                    onChange={(event) =>
+                    onChange={(
+                      event
+                    ) =>
                       setMessage(
                         event.target.value
                       )
                     }
-                    onKeyDown={handleKeyDown}
+                    onKeyDown={
+                      handleKeyDown
+                    }
                     placeholder="Ask a legal question..."
                     rows={3}
                     disabled={loading}
@@ -1074,21 +1549,29 @@ export default function Chat() {
                   <div className="flex items-center justify-between border-t border-slate-100 px-3 py-2">
 
 
+                    {/* ATTACH */}
+
                     <button
                       type="button"
                       className="flex items-center gap-2 rounded-lg px-3 py-2 text-[11px] text-slate-500 transition hover:bg-slate-50"
                     >
 
-                      <Paperclip size={14} />
+                      <Paperclip
+                        size={14}
+                      />
 
                       Attach PDF
 
                     </button>
 
 
+                    {/* SEND */}
+
                     <button
                       type="button"
-                      onClick={handleSend}
+                      onClick={
+                        handleSend
+                      }
                       disabled={
                         !message.trim() ||
                         loading
@@ -1105,9 +1588,12 @@ export default function Chat() {
 
                       ) : (
 
-                        <Send size={14} />
+                        <Send
+                          size={14}
+                        />
 
                       )}
+
 
                       {loading
                         ? "Thinking..."
@@ -1121,8 +1607,10 @@ export default function Chat() {
 
 
                 <p className="mt-3 text-center text-[10px] text-slate-400">
+
                   AI-generated legal information may not constitute legal advice.
                   Verify important matters with official sources or a qualified lawyer.
+
                 </p>
 
               </div>
@@ -1161,6 +1649,7 @@ export default function Chat() {
                   className="mt-1 text-slate-700"
                 />
 
+
                 <div>
 
                   <p className="text-[12px] font-semibold">
@@ -1178,7 +1667,7 @@ export default function Chat() {
             </div>
 
 
-            {/* RECENT QUERIES */}
+            {/* RECENT */}
 
             <div className="mt-4 rounded-xl border border-slate-200 p-4">
 
@@ -1188,20 +1677,34 @@ export default function Chat() {
                   Recent Queries
                 </h3>
 
-                <button className="text-[10px] text-slate-500 hover:text-slate-800">
+                <button
+                  type="button"
+                  className="text-[10px] text-slate-500 hover:text-slate-800"
+                >
                   See all
                 </button>
 
               </div>
 
 
-              <RecentQuery text="Explain Article 21" />
+              <RecentQuery
+                text="Explain Article 21"
+              />
 
-              <RecentQuery text="What is Section 420?" />
 
-              <RecentQuery text="Difference between IPC and BNS" />
+              <RecentQuery
+                text="What is Section 420?"
+              />
 
-              <RecentQuery text="My rights if I am arrested" />
+
+              <RecentQuery
+                text="Difference between IPC and BNS"
+              />
+
+
+              <RecentQuery
+                text="My rights if I am arrested"
+              />
 
             </div>
 
@@ -1214,12 +1717,18 @@ export default function Chat() {
                 "
               </div>
 
+
               <p className="mt-1 text-[11px] italic leading-5 text-slate-500">
+
                 A more informed citizenry is the foundation of a stronger India.
+
               </p>
 
+
               <p className="mt-3 text-right text-[10px] font-medium text-slate-600">
+
                 — Constitution of India
+
               </p>
 
             </div>
@@ -1231,6 +1740,7 @@ export default function Chat() {
       </main>
 
     </div>
+
   );
 }
 
@@ -1269,6 +1779,7 @@ function SidebarItem({
       </span>
 
     </Link>
+
   );
 }
 
@@ -1300,7 +1811,9 @@ function Suggestion({
 
         <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#eef4fb] text-[#17304a]">
 
-          <MessageSquare size={15} />
+          <MessageSquare
+            size={15}
+          />
 
         </div>
 
@@ -1311,6 +1824,7 @@ function Suggestion({
             {title}
           </p>
 
+
           <p className="mt-1 text-[10px] leading-5 text-slate-500">
             {description}
           </p>
@@ -1320,6 +1834,7 @@ function Suggestion({
       </div>
 
     </button>
+
   );
 }
 
@@ -1345,10 +1860,12 @@ function RecentQuery({
         {text}
       </p>
 
+
       <p className="mt-1 text-[9px] text-slate-400">
         Recent
       </p>
 
     </button>
+
   );
 }

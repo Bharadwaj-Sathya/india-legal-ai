@@ -24,9 +24,12 @@ from app.features.rag.retriever import retrieve
 from app.features.rag.generator import (
     create_llm,
     generate_answer,
+    stream_answer,
 )
 
+import json
 
+from fastapi.responses import StreamingResponse
 # ============================================================
 # CONFIGURATION
 # ============================================================
@@ -367,7 +370,208 @@ def ingest_documents():
             detail=f"Ingestion failed: {str(exc)}",
         )
 
+# ============================================================
+# STREAMING QUERY — SSE
+# ============================================================
 
+@router.post("/query/stream")
+def query_legal_rag_stream(
+    request: RAGQuery,
+):
+
+    try:
+
+        # ----------------------------------------------------
+        # Load resources
+        # ----------------------------------------------------
+
+        vectorstore = get_vectorstore()
+
+        llm = get_llm()
+
+        # ----------------------------------------------------
+        # Optional Act filter
+        # ----------------------------------------------------
+
+        metadata_filter = None
+
+        if request.act:
+
+            metadata_filter = {
+                "act": request.act
+            }
+
+        # ----------------------------------------------------
+        # Retrieve documents FIRST
+        # ----------------------------------------------------
+
+        documents = retrieve(
+            vectorstore=vectorstore,
+            query=request.query,
+            k=request.k,
+            filter=metadata_filter,
+        )
+
+        # ----------------------------------------------------
+        # SSE generator
+        # ----------------------------------------------------
+
+        def event_stream():
+
+            # ------------------------------------------------
+            # No results
+            # ------------------------------------------------
+
+            if not documents:
+
+                yield (
+                    "event: token\n"
+                    "data: "
+                    + json.dumps(
+                        "## Answer\n\n"
+                        "I could not find relevant information "
+                        "in the provided legal documents."
+                    )
+                    + "\n\n"
+                )
+
+                yield (
+                    "event: done\n"
+                    "data: {}\n\n"
+                )
+
+                return
+
+            # ------------------------------------------------
+            # Send source metadata first
+            # ------------------------------------------------
+
+            source_data = []
+
+            for doc in documents:
+
+                metadata = doc.metadata or {}
+
+                page_value = metadata.get(
+                    "page",
+                    metadata.get(
+                        "start_page"
+                    ),
+                )
+
+                chunk_id_value = metadata.get(
+                    "chunk_id"
+                )
+
+                source_data.append(
+                    {
+                        "content": doc.page_content,
+
+                        "act": metadata.get(
+                            "act"
+                        ),
+
+                        "section": metadata.get(
+                            "section"
+                        ),
+
+                        "chapter": metadata.get(
+                            "chapter"
+                        ),
+
+                        "category": metadata.get(
+                            "category"
+                        ),
+
+                        "source_file": metadata.get(
+                            "source_file"
+                        ),
+
+                        "page": page_value,
+
+                        "chunk_id": chunk_id_value,
+                    }
+                )
+
+            yield (
+                "event: sources\n"
+                "data: "
+                + json.dumps(
+                    source_data,
+                    ensure_ascii=False,
+                )
+                + "\n\n"
+            )
+
+            # ------------------------------------------------
+            # Stream LLM tokens
+            # ------------------------------------------------
+
+            try:
+
+                for token in stream_answer(
+                    query=request.query,
+                    documents=documents,
+                    llm=llm,
+                ):
+
+                    yield (
+                        "event: token\n"
+                        "data: "
+                        + json.dumps(
+                            token,
+                            ensure_ascii=False,
+                        )
+                        + "\n\n"
+                    )
+
+            except Exception as exc:
+
+                yield (
+                    "event: error\n"
+                    "data: "
+                    + json.dumps(
+                        str(exc)
+                    )
+                    + "\n\n"
+                )
+
+                return
+
+            # ------------------------------------------------
+            # Finished
+            # ------------------------------------------------
+
+            yield (
+                "event: done\n"
+                "data: {}\n\n"
+            )
+
+
+        # ----------------------------------------------------
+        # Return SSE response
+        # ----------------------------------------------------
+
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    except Exception as exc:
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"RAG streaming query failed: "
+                f"{str(exc)}"
+            ),
+        )
+    
 # ============================================================
 # QUERY
 # ============================================================
